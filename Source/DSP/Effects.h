@@ -105,7 +105,7 @@ private:
     Ramp mix, drv;
 };
 
-class Flanger : public FxUnit
+class FlangerFx : public FxUnit
 {
 public:
     void prepare (double sr, int) override;
@@ -118,7 +118,7 @@ private:
     Ramp mix;
 };
 
-class Phaser : public FxUnit
+class PhaserFx : public FxUnit
 {
 public:
     void prepare (double sr, int) override;
@@ -130,7 +130,7 @@ private:
     Ramp mix;
 };
 
-class Chorus : public FxUnit
+class ChorusFx : public FxUnit
 {
 public:
     void prepare (double sr, int) override;

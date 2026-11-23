@@ -213,16 +213,16 @@ void Distortion::process (float* l, float* r, int n, const FxContext& ctx)
 
 //==============================================================================
 // Flanger
-void Flanger::prepare (double rate, int)
+void FlangerFx::prepare (double rate, int)
 {
     sr = rate;
     for (auto& d : line) d.allocate ((int) (0.03 * sr));
     reset();
 }
 
-void Flanger::reset() { for (auto& d : line) d.clear(); fb[0] = fb[1] = 0.0f; mix.init = false; }
+void FlangerFx::reset() { for (auto& d : line) d.clear(); fb[0] = fb[1] = 0.0f; mix.init = false; }
 
-void Flanger::process (float* l, float* r, int n, const FxContext& ctx)
+void FlangerFx::process (float* l, float* r, int n, const FxContext& ctx)
 {
     const double hz = rateHzFor (ctx, pid::flanger (pid::Flanger::rate), pid::flanger (pid::Flanger::sync), pid::flanger (pid::Flanger::syncRate));
     const float depth = ctx.value (pid::flanger (pid::Flanger::depth));
@@ -253,8 +253,8 @@ void Flanger::process (float* l, float* r, int n, const FxContext& ctx)
 
 //==============================================================================
 // Phaser
-void Phaser::prepare (double rate, int) { sr = rate; reset(); }
-void Phaser::reset()
+void PhaserFx::prepare (double rate, int) { sr = rate; reset(); }
+void PhaserFx::reset()
 {
     for (auto& a : x1) for (auto& v : a) v = 0.0f;
     for (auto& a : y1) for (auto& v : a) v = 0.0f;
@@ -262,7 +262,7 @@ void Phaser::reset()
     mix.init = false;
 }
 
-void Phaser::process (float* l, float* r, int n, const FxContext& ctx)
+void PhaserFx::process (float* l, float* r, int n, const FxContext& ctx)
 {
     const double hz = rateHzFor (ctx, pid::phaser (pid::Phaser::rate), pid::phaser (pid::Phaser::sync), pid::phaser (pid::Phaser::syncRate));
     const float depth = ctx.value (pid::phaser (pid::Phaser::depth));
@@ -302,15 +302,15 @@ void Phaser::process (float* l, float* r, int n, const FxContext& ctx)
 
 //==============================================================================
 // Chorus
-void Chorus::prepare (double rate, int)
+void ChorusFx::prepare (double rate, int)
 {
     sr = rate;
     for (auto& d : line) d.allocate ((int) (0.06 * sr));
     reset();
 }
-void Chorus::reset() { for (auto& d : line) d.clear(); lp[0] = lp[1] = fb[0] = fb[1] = 0.0f; mix.init = false; }
+void ChorusFx::reset() { for (auto& d : line) d.clear(); lp[0] = lp[1] = fb[0] = fb[1] = 0.0f; mix.init = false; }
 
-void Chorus::process (float* l, float* r, int n, const FxContext& ctx)
+void ChorusFx::process (float* l, float* r, int n, const FxContext& ctx)
 {
     const double hz = rateHzFor (ctx, pid::chorus (pid::Chorus::rate), pid::chorus (pid::Chorus::sync), pid::chorus (pid::Chorus::syncRate));
     const float d1 = ctx.value (pid::chorus (pid::Chorus::delay1)) * 0.001f * (float) sr;
@@ -471,8 +471,8 @@ float Compressor::compressSample (int band, float levelDb, float thr, float rati
     if (upward)
     {
         const float lowThr = thr - 24.0f;
-        if (e < lowThr && e > -70.0f)
-            gr += std::min (18.0f, (lowThr - e) * 0.6f);
+        if (e < lowThr && e > -60.0f)
+            gr += std::min (9.0f, (lowThr - e) * 0.35f);
     }
     return gr;
 }

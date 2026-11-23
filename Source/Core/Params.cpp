@@ -60,18 +60,23 @@ int pid::fxMix (FxType t)
 }
 
 //==============================================================================
+static juce::String fmt (float v, int decimals)
+{
+    return decimals <= 0 ? juce::String (juce::roundToInt (v)) : juce::String (v, decimals);
+}
+
 static juce::String formatHz (float hz)
 {
     if (hz >= 1000.0f)
-        return juce::String (hz / 1000.0f, hz >= 10000.0f ? 1 : 2) + " kHz";
-    return juce::String (hz, hz < 10.0f ? 2 : (hz < 100.0f ? 1 : 0)) + " Hz";
+        return fmt (hz / 1000.0f, hz >= 10000.0f ? 1 : 2) + " kHz";
+    return fmt (hz, hz < 10.0f ? 2 : (hz < 100.0f ? 1 : 0)) + " Hz";
 }
 
 static juce::String formatSeconds (float s)
 {
     if (s < 0.001f)  return juce::String (s * 1000.0f, 2) + " ms";
     if (s < 0.1f)    return juce::String (s * 1000.0f, 1) + " ms";
-    if (s < 1.0f)    return juce::String (s * 1000.0f, 0) + " ms";
+    if (s < 1.0f)    return fmt (s * 1000.0f, 0) + " ms";
     return juce::String (s, 2) + " s";
 }
 
@@ -116,7 +121,7 @@ juce::String ParamSpec::formatValue (float v, int) const
             if (p == 0) return "C";
             return (p < 0 ? "L " : "R ") + juce::String (std::abs (p));
         }
-        case ParamUnit::ratio:          return juce::String (v, v < 10.0f ? 1 : 0) + ":1";
+        case ParamUnit::ratio:          return fmt (v, v < 10.0f ? 1 : 0) + ":1";
         case ParamUnit::frames:         return juce::String (v * 100.0f, 1) + "%";
         case ParamUnit::multiplier:     return "x" + juce::String (v, 2);
         case ParamUnit::none:           break;

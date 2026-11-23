@@ -129,6 +129,7 @@ if(CUREUM_BUILD_TESTS)
     target_sources(CureumTests PRIVATE ${CUREUM_TEST_SOURCES})
     target_compile_definitions(CureumTests PRIVATE
         CUREUM_TESTS=1
+        JUCE_MODAL_LOOPS_PERMITTED=1
         CUREUM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(CureumTests
         PRIVATE

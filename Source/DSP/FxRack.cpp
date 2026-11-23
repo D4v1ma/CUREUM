@@ -7,12 +7,12 @@ FxRack::FxRack()
 {
     units[(size_t) FxType::hyper]      = std::make_unique<HyperDimension>();
     units[(size_t) FxType::distortion] = std::make_unique<Distortion>();
-    units[(size_t) FxType::flanger]    = std::make_unique<Flanger>();
-    units[(size_t) FxType::phaser]     = std::make_unique<Phaser>();
-    units[(size_t) FxType::chorus]     = std::make_unique<Chorus>();
+    units[(size_t) FxType::flanger]    = std::make_unique<FlangerFx>();
+    units[(size_t) FxType::phaser]     = std::make_unique<PhaserFx>();
+    units[(size_t) FxType::chorus]     = std::make_unique<ChorusFx>();
     units[(size_t) FxType::delay]      = std::make_unique<StereoDelay>();
     units[(size_t) FxType::compressor] = std::make_unique<Compressor>();
-    units[(size_t) FxType::reverb]     = std::make_unique<Reverb>();
+    units[(size_t) FxType::reverb]     = std::make_unique<ReverbFx>();
     units[(size_t) FxType::eq]         = std::make_unique<Equalizer>();
     units[(size_t) FxType::filter]     = std::make_unique<FxFilterUnit>();
     units[(size_t) FxType::bode]       = std::make_unique<BodeShifter>();

@@ -2,65 +2,12 @@
 #include "PluginEditor.h"
 #include "../Core/ValueMaps.h"
 #include "../Presets/WavetableIO.h"
+#include "../Presets/StateFormat.h"
 
 namespace cureum
 {
 
 using namespace pid;
-
-namespace
-{
-    juce::ValueTree wavetableToTree (const Wavetable& t, int osc)
-    {
-        juce::ValueTree tree ("Wavetable");
-        tree.setProperty ("osc", osc, nullptr);
-        tree.setProperty ("name", t.getName(), nullptr);
-        tree.setProperty ("source", t.sourcePath, nullptr);
-        tree.setProperty ("factory", t.isFactory, nullptr);
-        tree.setProperty ("frames", t.getNumFrames(), nullptr);
-        tree.setProperty ("interp", t.interpolatesFrames(), nullptr);
-        if (! t.isFactory)
-        {
-            const auto& raw = t.getRawData();
-            juce::MemoryBlock mb (raw.data(), raw.size() * sizeof (float));
-            tree.setProperty ("data", mb.toBase64Encoding(), nullptr);
-        }
-        return tree;
-    }
-
-    WavetablePtr wavetableFromTree (const juce::ValueTree& tree)
-    {
-        const auto name = tree.getProperty ("name").toString();
-        if ((bool) tree.getProperty ("factory", false))
-            if (auto t = WavetableFactory::get (name))
-                return t;
-
-        const auto data = tree.getProperty ("data").toString();
-        if (data.isNotEmpty())
-        {
-            juce::MemoryBlock mb;
-            if (mb.fromBase64Encoding (data) && mb.getSize() >= sizeof (float) * Wavetable::kFrameSize)
-            {
-                std::vector<float> frames (mb.getSize() / sizeof (float));
-                std::memcpy (frames.data(), mb.getData(), frames.size() * sizeof (float));
-                Wavetable::Options o;
-                o.interpolateFrames = tree.getProperty ("interp", true);
-                auto t = std::const_pointer_cast<Wavetable> (Wavetable::create (name, std::move (frames), o));
-                t->sourcePath = tree.getProperty ("source").toString();
-                return t;
-            }
-        }
-
-        const juce::File f (tree.getProperty ("source").toString());
-        if (juce::File::isAbsolutePath (f.getFullPathName()) && f.existsAsFile())
-        {
-            juce::String err;
-            if (auto t = WavetableIO::loadWavetable (f, err))
-                return t;
-        }
-        return WavetableFactory::get (WavetableFactory::closestMatch (name));
-    }
-}
 
 //==============================================================================
 CureumProcessor::CureumProcessor()
@@ -600,7 +547,7 @@ juce::ValueTree CureumProcessor::createStateTree (bool includePlugins) const
     juce::ValueTree tables ("Wavetables");
     for (int o = 0; o < kNumOscillators; ++o)
         if (auto t = getWavetable (o))
-            tables.appendChild (wavetableToTree (*t, o), nullptr);
+            tables.appendChild (StateFormat::wavetableToTree (*t, o), nullptr);
     root.appendChild (tables, nullptr);
 
     juce::ValueTree shapes ("LfoShapes");
@@ -682,7 +629,7 @@ void CureumProcessor::loadStateTree (const juce::ValueTree& tree, bool restorePl
     {
         const int o = t.getProperty ("osc", -1);
         if (o >= 0 && o < kNumOscillators)
-            setWavetable (o, wavetableFromTree (t));
+            setWavetable (o, StateFormat::wavetableFromTree (t));
     }
 
     for (int l = 0; l < kNumLfos; ++l)

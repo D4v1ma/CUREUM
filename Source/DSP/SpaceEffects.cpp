@@ -8,7 +8,7 @@ using dsp::kTwoPi;
 
 //==============================================================================
 // Reverb
-void Reverb::prepare (double rate, int)
+void ReverbFx::prepare (double rate, int)
 {
     sr = rate;
     const double scale = sr / 44100.0;
@@ -34,7 +34,7 @@ void Reverb::prepare (double rate, int)
     reset();
 }
 
-void Reverb::reset()
+void ReverbFx::reset()
 {
     pre.clear();
     for (auto& h : hall) h.clear();
@@ -46,7 +46,7 @@ void Reverb::reset()
     mix.init = false;
 }
 
-void Reverb::processHall (float inL, float inR, float& outL, float& outR) noexcept
+void ReverbFx::processHall (float inL, float inR, float& outL, float& outR) noexcept
 {
     float in = 0.5f * (inL + inR);
     for (auto& d : hallDiff) in = d.process (in);
@@ -73,7 +73,7 @@ void Reverb::processHall (float inL, float inR, float& outL, float& outR) noexce
     outR = (d[1] + d[3] + d[5] + d[7]) * 0.6f;
 }
 
-void Reverb::processPlate (float inL, float inR, float& outL, float& outR) noexcept
+void ReverbFx::processPlate (float inL, float inR, float& outL, float& outR) noexcept
 {
     float in = 0.5f * (inL + inR);
     bandLp = in + 0.3f * (bandLp - in);
@@ -107,7 +107,7 @@ void Reverb::processPlate (float inL, float inR, float& outL, float& outR) noexc
     outR = (tankDelay[1].read (tankLen[1] * 0.35f) + tankDelay2[0].read (tankLen2[0] * 0.55f) + tankOut[1]) * 0.55f;
 }
 
-void Reverb::process (float* l, float* r, int n, const FxContext& ctx)
+void ReverbFx::process (float* l, float* r, int n, const FxContext& ctx)
 {
     mode = (ReverbMode) ctx.choice (pid::reverb (pid::Reverb::mode));
     const float size = ctx.value (pid::reverb (pid::Reverb::size));

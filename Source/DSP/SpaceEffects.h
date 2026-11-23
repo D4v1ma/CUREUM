@@ -5,7 +5,7 @@
 namespace cureum
 {
 
-class Reverb : public FxUnit
+class ReverbFx : public FxUnit
 {
 public:
     void prepare (double sr, int maxBlock) override;
