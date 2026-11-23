@@ -23,6 +23,7 @@ public:
     {
         bool removeDC = true;
         bool normalise = false;   // scale so the loudest frame peaks at 1.0
+        bool normalisePerFrame = false;   // scale every frame to peak at 1.0
         bool interpolateFrames = true;
     };
 

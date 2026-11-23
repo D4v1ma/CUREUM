@@ -891,7 +891,7 @@ void GlobalPage::resized()
     auto knobs = s1;
     for (auto* c : tuneRow)
     {
-        if (dynamic_cast<ModKnob*> (c) != nullptr) c->setBounds (knobs.removeFromLeft (70));
+        if (dynamic_cast<ModKnob*> (c) != nullptr) c->setBounds (knobs.removeFromLeft (70).withSizeKeepingCentre (62, 66));
         else { knobs.removeFromLeft (10); c->setBounds (knobs.removeFromLeft (c == tuneRow.back() ? 60 : 170).withSizeKeepingCentre (c == tuneRow.back() ? 60 : 170, 24)); }
     }
 

@@ -12,6 +12,7 @@ using namespace pid;
 SectionPanel::SectionPanel (EditorServices& s, const juce::String& t, int enableParam)
     : services (s), proc (s.getProcessor()), title (t)
 {
+    setName (t);
     if (enableParam >= 0)
     {
         power = std::make_unique<ParamToggle> (s, enableParam, ParamToggle::Style::power);
@@ -32,7 +33,8 @@ void SectionPanel::paint (juce::Graphics& g)
     {
         if (power != nullptr) h.removeFromLeft (22);
         g.setFont (theme::title (12.5f));
-        g.setColour (titleColour);
+        const bool off = power != nullptr && proc.getPlain (power->getParamIndex()) < 0.5f;
+        g.setColour (off ? theme::textDim : titleColour);
         g.drawText (title, h, juce::Justification::centredLeft);
     }
 }
@@ -77,7 +79,7 @@ juce::PopupMenu buildFilterTypeMenu (int current)
         juce::PopupMenu sub;
         bool ticked = false;
         for (int i = 0; i < numFilterTypes(); ++i)
-            if (filterTypes()[(size_t) i].category == c)
+            if (juce::String (filterTypes()[(size_t) i].category) == c)
             {
                 sub.addItem (i + 1, filterTypes()[(size_t) i].name, true, i == current);
                 ticked = ticked || i == current;
@@ -382,6 +384,8 @@ FilterPanel::FilterPanel (EditorServices& s)
             for (int k = 0; k < 4; ++k) m.addItem (k + 1, names[k], true, k == c);
         });
         routes[i]->setPrefix (srcLabels[i]);
+        routes[i]->setCompact (true);
+        routes[i]->displayText = [] (int c) { const char* shortNames[] = { "F1", "F2", "1+2", "DIR" }; return juce::String (shortNames[juce::jlimit (0, 3, c)]); };
         addAndMakeVisible (*routes[i]);
     }
     config = std::make_unique<ParamMenu> (s, pid::route (Route::filterConfig));
@@ -456,7 +460,7 @@ void FilterPanel::layoutContent (juce::Rectangle<int> r)
     r.removeFromTop (26);
     auto bottom = r.removeFromBottom (22);
     r.removeFromBottom (4);
-    config->setBounds (bottom.removeFromRight (78));
+    config->setBounds (bottom.removeFromRight (70));
     bottom.removeFromRight (4);
     const int rw = bottom.getWidth() / 5;
     for (int i = 0; i < 5; ++i) routes[i]->setBounds (bottom.removeFromLeft (rw).reduced (1, 0));
@@ -563,6 +567,8 @@ ModulationPanel::ModulationPanel (EditorServices& s) : SectionPanel (s, {}), env
     select (0);
 }
 
+ModulationPanel::~ModulationPanel() = default;
+
 void ModulationPanel::select (int tab)
 {
     selected = juce::jlimit (0, kNumEnvelopes + kNumLfos - 1, tab);
@@ -621,9 +627,11 @@ void ModulationPanel::layoutContent (juce::Rectangle<int> r)
     if (selected < kNumEnvelopes)
     {
         auto& k = envKnobs[selected];
-        auto top = r.removeFromTop (r.getHeight() * 55 / 100);
+        auto block = r.withSizeKeepingCentre (r.getWidth(), std::min (r.getHeight(), 128));
+        auto top = block.removeFromTop (66);
         layoutRow (top, { k[0].get(), k[1].get(), k[2].get(), k[3].get(), k[4].get() }, 0);
-        auto bottom = r.withSizeKeepingCentre (r.getWidth() * 3 / 5, r.getHeight());
+        block.removeFromTop (6);
+        auto bottom = block.withSizeKeepingCentre (r.getWidth() * 3 / 5, std::min (block.getHeight(), 54));
         layoutRow (bottom, { k[5].get(), k[6].get(), k[7].get() }, 0);
     }
     else
@@ -635,7 +643,7 @@ void ModulationPanel::layoutContent (juce::Rectangle<int> r)
         r.removeFromTop (4);
         auto feelRow = r.removeFromBottom (22);
         w.feel->setBounds (feelRow.removeFromLeft (feelRow.getWidth() / 2));
-        auto knobRow = r;
+        auto knobRow = r.withSizeKeepingCentre (r.getWidth(), std::min (r.getHeight(), 66));
         const int kw = knobRow.getWidth() / 5;
         auto first = knobRow.removeFromLeft (kw);
         w.rate->setBounds (first);

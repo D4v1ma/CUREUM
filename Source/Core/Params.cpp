@@ -440,7 +440,7 @@ ParamRegistry::ParamRegistry()
         b.choice (dist (Dist::filterPos), p + "filterpos", "Distortion Filter", "FILTER", g, distFilterPosNames(), 0, "Places a filter before (Pre) or after (Post) the shaper.");
         b.choice (dist (Dist::filterType), p + "filtertype", "Distortion Filter Type", "TYPE", g, distFilterTypeNames(), 0, "Response of the distortion filter.");
         b.cont (dist (Dist::freq), p + "freq", "Distortion Filter Freq", "FREQ", g, ParamUnit::hertz, cutoffRange(), maps::cutoffFrom01 (0.5f), G, "Frequency of the distortion filter.");
-        b.cont (dist (Dist::bw), p + "bw", "Distortion Filter Q", "Q", g, ParamUnit::percent, linear (0, 1), 0.5f, G, "Bandwidth/resonance of the distortion filter.");
+        b.cont (dist (Dist::bw), p + "bw", "Distortion Filter Q", "RESO", g, ParamUnit::percent, linear (0, 1), 0.5f, G, "Bandwidth/resonance of the distortion filter.");
     }
     {
         const auto p = fx ("flanger"); const juce::String g = "Flanger";
@@ -525,11 +525,11 @@ ParamRegistry::ParamRegistry()
         b.toggle (eq (Eq::enable), p + "enable", "EQ On", "ON", g, false, "Enables the two-band equaliser.");
         b.choice (eq (Eq::lowType), p + "lowtype", "EQ Low Type", "LOW", g, eqLowTypeNames(), 0, "Shape of the low band.");
         b.cont (eq (Eq::lowFreq), p + "lowfreq", "EQ Low Freq", "FREQ", g, ParamUnit::hertz, skewed (20.0f, 20000.0f, 500.0f), 200.0f, G, "Frequency of the low band.");
-        b.cont (eq (Eq::lowQ), p + "lowq", "EQ Low Q", "Q", g, ParamUnit::none, skewed (0.1f, 10.0f, 1.0f), 0.707f, G, "Bandwidth of the low band.");
+        b.cont (eq (Eq::lowQ), p + "lowq", "EQ Low Q", "WIDTH", g, ParamUnit::none, skewed (0.1f, 10.0f, 1.0f), 0.707f, G, "Bandwidth of the low band.");
         b.cont (eq (Eq::lowGain), p + "lowgain", "EQ Low Gain", "GAIN", g, ParamUnit::decibel, linear (-24, 24), 0.0f, G, "Boost or cut of the low band.");
         b.choice (eq (Eq::highType), p + "hightype", "EQ High Type", "HIGH", g, eqHighTypeNames(), 0, "Shape of the high band.");
         b.cont (eq (Eq::highFreq), p + "highfreq", "EQ High Freq", "FREQ", g, ParamUnit::hertz, skewed (20.0f, 20000.0f, 500.0f), 4000.0f, G, "Frequency of the high band.");
-        b.cont (eq (Eq::highQ), p + "highq", "EQ High Q", "Q", g, ParamUnit::none, skewed (0.1f, 10.0f, 1.0f), 0.707f, G, "Bandwidth of the high band.");
+        b.cont (eq (Eq::highQ), p + "highq", "EQ High Q", "WIDTH", g, ParamUnit::none, skewed (0.1f, 10.0f, 1.0f), 0.707f, G, "Bandwidth of the high band.");
         b.cont (eq (Eq::highGain), p + "highgain", "EQ High Gain", "GAIN", g, ParamUnit::decibel, linear (-24, 24), 0.0f, G, "Boost or cut of the high band.");
     }
     {

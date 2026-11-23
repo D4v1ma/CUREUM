@@ -27,7 +27,7 @@ public:
     int getYForText (const juce::String& text) const;
     void paint (juce::Graphics&) override;
 private:
-    struct Block { enum Kind { h1, h2, para, bullet, number } kind; juce::String text; int number = 0; juce::TextLayout layout; int y = 0, h = 0; };
+    struct Block { enum Kind { h1, h2, para, bullet, numbered } kind; juce::String text; int number = 0; juce::TextLayout layout; int y = 0, h = 0; };
     std::vector<Block> blocks;
     juce::String highlight;
 };

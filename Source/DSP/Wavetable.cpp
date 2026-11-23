@@ -59,7 +59,18 @@ void Wavetable::build (const Options& options)
         }
     }
 
-    if (options.normalise)
+    if (options.normalisePerFrame)
+    {
+        for (int f = 0; f < numFrames; ++f)
+        {
+            float* fr = raw.data() + (size_t) f * kFrameSize;
+            float peak = 0.0f;
+            for (int i = 0; i < kFrameSize; ++i) peak = std::max (peak, std::abs (fr[i]));
+            if (peak > 1.0e-6f)
+                for (int i = 0; i < kFrameSize; ++i) fr[i] /= peak;
+        }
+    }
+    else if (options.normalise)
     {
         float peak = 0.0f;
         for (auto s : raw) peak = std::max (peak, std::abs (s));

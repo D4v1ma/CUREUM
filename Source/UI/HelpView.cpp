@@ -122,7 +122,7 @@ void MarkdownView::setMarkdown (const juce::String& md, const juce::String& hl)
         if (t.length() > 2 && juce::CharacterFunctions::isDigit (t[0]) && t.containsChar ('.') && t.indexOfChar ('.') < 3 && t[t.indexOfChar ('.') + 1] == ' ')
         {
             flushPara();
-            Block b { Block::number, t.fromFirstOccurrenceOf (". ", false, false) };
+            Block b { Block::numbered, t.fromFirstOccurrenceOf (". ", false, false) };
             b.number = t.getIntValue();
             blocks.push_back (b);
             continue;
@@ -142,7 +142,7 @@ int MarkdownView::layoutForWidth (int width)
         auto colour = theme::textDim.brighter (0.3f);
         if (b.kind == Block::h1) { size = 24.0f; weight = 3; colour = theme::text; spaceBefore = 4; }
         if (b.kind == Block::h2) { size = 17.0f; weight = 3; colour = theme::accent; spaceBefore = 16; }
-        if (b.kind == Block::bullet || b.kind == Block::number) { indent = 22; spaceBefore = 3; }
+        if (b.kind == Block::bullet || b.kind == Block::numbered) { indent = 22; spaceBefore = 3; }
         auto as = inlineMarkdown (b.text, size, colour, weight, highlight);
         b.layout.createLayout (as, (float) (width - indent - 8));
         y += spaceBefore;
@@ -164,13 +164,13 @@ void MarkdownView::paint (juce::Graphics& g)
 {
     for (auto& b : blocks)
     {
-        const int indent = (b.kind == Block::bullet || b.kind == Block::number) ? 22 : 0;
+        const int indent = (b.kind == Block::bullet || b.kind == Block::numbered) ? 22 : 0;
         if (b.kind == Block::bullet)
         {
             g.setColour (theme::accent);
             g.fillEllipse (8.0f, (float) b.y + 7.0f, 5.0f, 5.0f);
         }
-        if (b.kind == Block::number)
+        if (b.kind == Block::numbered)
         {
             g.setColour (theme::accent);
             g.setFont (theme::font (13.0f, 3));

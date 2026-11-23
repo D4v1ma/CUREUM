@@ -481,23 +481,27 @@ void ParamMenu::paint (juce::Graphics& g)
     g.fillRoundedRectangle (r, 5.0f);
     g.setColour (hovering ? theme::outlineHi : theme::outline);
     g.drawRoundedRectangle (r, 5.0f, 1.0f);
-    auto t = getLocalBounds().reduced (7, 0);
-    juce::Path arrow;
-    const float ax = (float) getWidth() - 10.0f, ay = (float) getHeight() * 0.5f;
-    arrow.addTriangle (ax - 3.5f, ay - 2.0f, ax + 3.5f, ay - 2.0f, ax, ay + 2.5f);
-    g.setColour (theme::textDim);
-    g.fillPath (arrow);
-    t.removeFromRight (12);
+    auto t = getLocalBounds().reduced (compact ? 4 : 7, 0);
+    if (! compact)
+    {
+        juce::Path arrow;
+        const float ax = (float) getWidth() - 10.0f, ay = (float) getHeight() * 0.5f;
+        arrow.addTriangle (ax - 3.5f, ay - 2.0f, ax + 3.5f, ay - 2.0f, ax, ay + 2.5f);
+        g.setColour (theme::textDim);
+        g.fillPath (arrow);
+        t.removeFromRight (12);
+    }
     if (prefix.isNotEmpty())
     {
         g.setFont (theme::label (10.0f));
         g.setColour (theme::textFaint);
-        const int w = juce::GlyphArrangement::getStringWidthInt (theme::label (10.0f), prefix) + 6;
+        const int w = juce::GlyphArrangement::getStringWidthInt (theme::label (10.0f), prefix) + (compact ? 3 : 6);
         g.drawText (prefix, t.removeFromLeft (w), juce::Justification::centredLeft);
     }
-    g.setFont (theme::value (std::min (12.5f, (float) getHeight() * 0.56f)));
+    g.setFont (theme::value (std::min (compact ? 11.0f : 12.5f, (float) getHeight() * 0.56f)));
     g.setColour (theme::text);
-    g.drawFittedText (spec().formatValue (getPlain()), t, juce::Justification::centredLeft, 1);
+    g.drawFittedText (displayText ? displayText (juce::roundToInt (getPlain())) : spec().formatValue (getPlain()), t,
+                      compact ? juce::Justification::centred : juce::Justification::centredLeft, 1, 0.8f);
 }
 
 void ParamMenu::mouseDown (const juce::MouseEvent& e)

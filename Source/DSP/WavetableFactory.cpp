@@ -213,7 +213,7 @@ WavetablePtr WavetableFactory::get (const juce::String& name)
     if (frames.empty())
         return nullptr;
     Wavetable::Options opts;
-    opts.normalise = true;
+    opts.normalisePerFrame = true;
     auto table = std::const_pointer_cast<Wavetable> (Wavetable::create (name, std::move (frames), opts));
     table->isFactory = true;
     table->sourcePath = "factory:" + name;

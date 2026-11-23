@@ -101,6 +101,7 @@ class ModulationPanel : public SectionPanel, public Refreshable
 {
 public:
     explicit ModulationPanel (EditorServices& s);
+    ~ModulationPanel() override;
     void layoutContent (juce::Rectangle<int>) override;
     void paint (juce::Graphics&) override;
     void refresh() override;

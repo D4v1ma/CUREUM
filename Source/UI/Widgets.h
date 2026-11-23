@@ -141,9 +141,12 @@ public:
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     void setPrefix (const juce::String& p) { prefix = p; repaint(); }
     std::function<void (int itemId)> onExtraItem;   // ids >= 5000 are custom actions
+    std::function<juce::String (int choice)> displayText;   // optional compact text
+    void setCompact (bool c) { compact = c; repaint(); }     // tight padding, no arrow (narrow boxes)
 private:
     MenuBuilder builder;
     juce::String prefix;
+    bool compact = false;
 };
 
 //==============================================================================
