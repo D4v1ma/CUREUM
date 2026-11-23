@@ -24,7 +24,7 @@ public:
     void setInstance (std::unique_ptr<juce::AudioPluginInstance> newInstance);
     void clear();
     bool isLoaded() const;
-    juce::AudioPluginInstance* getInstance() const noexcept { return instance.get(); }
+    juce::AudioPluginInstance* getInstance() const noexcept { return instance.get(); }   // message thread
     juce::String getPluginName() const;
     juce::PluginDescription getDescription() const;
 
@@ -35,10 +35,14 @@ public:
 
 private:
     void prepareInstance (juce::AudioPluginInstance& p);
+    std::shared_ptr<juce::AudioPluginInstance> getShared() const;
 
     const int index;
+    // Guards the instance pointer only. The audio thread try-locks it, so nothing slow may run
+    // while it is held: callers copy the shared_ptr and talk to the plugin outside the lock. The
+    // shared ownership keeps an instance alive while a host saves state from a worker thread.
     mutable juce::SpinLock lock;
-    std::unique_ptr<juce::AudioPluginInstance> instance;
+    std::shared_ptr<juce::AudioPluginInstance> instance;
     juce::AudioBuffer<float> buffer;
     juce::MidiBuffer midi;
     double sr = 44100.0;

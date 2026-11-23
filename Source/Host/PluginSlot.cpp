@@ -3,6 +3,24 @@
 namespace cureum
 {
 
+namespace
+{
+    // Plugin instances must be deleted on the message thread. A worker thread that may hold the
+    // last reference (it saved state while the slot was being unloaded) hands it over instead.
+    void releaseOnMessageThread (std::shared_ptr<juce::AudioPluginInstance> p)
+    {
+        if (p == nullptr || juce::MessageManager::existsAndIsCurrentThread())
+            return;
+        juce::MessageManager::callAsync ([keep = std::move (p)]() mutable { keep.reset(); });
+    }
+}
+
+std::shared_ptr<juce::AudioPluginInstance> PluginSlot::getShared() const
+{
+    const juce::SpinLock::ScopedLockType sl (lock);
+    return instance;
+}
+
 PluginSlot::~PluginSlot()
 {
     const juce::SpinLock::ScopedLockType sl (lock);
@@ -84,8 +102,10 @@ void PluginSlot::process (float* l, float* r, int n, const FxContext& ctx)
 
 int PluginSlot::getLatencySamples() const
 {
-    const juce::SpinLock::ScopedLockType sl (lock);
-    return instance != nullptr ? instance->getLatencySamples() : 0;
+    auto p = getShared();
+    const int latency = p != nullptr ? p->getLatencySamples() : 0;
+    releaseOnMessageThread (std::move (p));
+    return latency;
 }
 
 void PluginSlot::setInstance (std::unique_ptr<juce::AudioPluginInstance> newInstance)
@@ -96,11 +116,11 @@ void PluginSlot::setInstance (std::unique_ptr<juce::AudioPluginInstance> newInst
         const int ch = std::max ({ 2, newInstance->getTotalNumInputChannels(), newInstance->getTotalNumOutputChannels() });
         juce::AudioBuffer<float> newBuffer (ch, maxBlock);
 
-        std::unique_ptr<juce::AudioPluginInstance> old;
+        std::shared_ptr<juce::AudioPluginInstance> fresh (std::move (newInstance)), old;
         {
             const juce::SpinLock::ScopedLockType sl (lock);
             old = std::move (instance);
-            instance = std::move (newInstance);
+            instance = std::move (fresh);
             buffer = std::move (newBuffer);
         }
         if (old != nullptr) old->releaseResources();
@@ -115,7 +135,7 @@ void PluginSlot::setInstance (std::unique_ptr<juce::AudioPluginInstance> newInst
 
 void PluginSlot::clear()
 {
-    std::unique_ptr<juce::AudioPluginInstance> old;
+    std::shared_ptr<juce::AudioPluginInstance> old;
     {
         const juce::SpinLock::ScopedLockType sl (lock);
         old = std::move (instance);
@@ -133,32 +153,33 @@ bool PluginSlot::isLoaded() const
 
 juce::String PluginSlot::getPluginName() const
 {
-    const juce::SpinLock::ScopedLockType sl (lock);
-    return instance != nullptr ? instance->getName() : juce::String();
+    auto p = getShared();
+    const auto name = p != nullptr ? p->getName() : juce::String();
+    releaseOnMessageThread (std::move (p));
+    return name;
 }
 
 juce::PluginDescription PluginSlot::getDescription() const
 {
-    const juce::SpinLock::ScopedLockType sl (lock);
-    return instance != nullptr ? instance->getPluginDescription() : juce::PluginDescription();
+    auto p = getShared();
+    const auto desc = p != nullptr ? p->getPluginDescription() : juce::PluginDescription();
+    releaseOnMessageThread (std::move (p));
+    return desc;
 }
 
 juce::ValueTree PluginSlot::saveState() const
 {
     juce::ValueTree tree ("PluginSlot");
     tree.setProperty ("index", index, nullptr);
-    juce::AudioPluginInstance* p = nullptr;
-    {
-        const juce::SpinLock::ScopedLockType sl (lock);
-        p = instance.get();
-        if (p == nullptr)
-            return tree;
-        if (auto xml = p->getPluginDescription().createXml())
-            tree.setProperty ("description", xml->toString (juce::XmlElement::TextFormat().singleLine()), nullptr);
-    }
+    auto p = getShared();
+    if (p == nullptr)
+        return tree;
+    if (auto xml = p->getPluginDescription().createXml())
+        tree.setProperty ("description", xml->toString (juce::XmlElement::TextFormat().singleLine()), nullptr);
     juce::MemoryBlock state;
     p->getStateInformation (state);
     tree.setProperty ("state", state.toBase64Encoding(), nullptr);
+    releaseOnMessageThread (std::move (p));
     return tree;
 }
 

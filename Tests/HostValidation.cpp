@@ -337,6 +337,74 @@ int runValidate (const juce::File& pluginFile)
     }
 
     //------------------------------------------------------------------------------------------
+    Report::section ("State save and restore from a worker thread (audio running, editor open)");
+    {
+        // Hosts may save or restore state from a worker thread, for example when autosaving or
+        // loading a project, while audio runs and the editor is open.
+        // Deliver the parameter resets queued by the previous section to the plugin (controller
+        // side on the message thread, processor side in the next block) before capturing.
+        pumpMessages (200);
+        play (p, 48000.0, 256, 0.05);
+        pumpMessages (100);
+        std::vector<float> before;
+        for (auto* param : params) before.push_back (param->getValue());
+        juce::MemoryBlock original;
+        p.getStateInformation (original);
+
+        std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditorAndMakeActive());
+        if (editor != nullptr)
+        {
+            editor->addToDesktop (juce::ComponentPeer::windowHasTitleBar);
+            editor->setVisible (true);
+        }
+        p.setRateAndBufferSizeDetails (48000.0, 256);
+        p.prepareToPlay (48000.0, 256);
+
+        std::atomic<bool> stop { false }, finite { true }, done { false };
+        std::atomic<int> emptyStates { 0 };
+        std::thread audio ([&]
+        {
+            while (! stop.load())
+                if (! play (p, 48000.0, 256, 0.1, {}, false).finite)
+                    finite = false;
+        });
+        std::thread worker ([&]
+        {
+            std::mt19937 rng (3);
+            std::uniform_real_distribution<float> uni (0.0f, 1.0f);
+            for (int i = 0; i < 15; ++i)
+            {
+                juce::MemoryBlock saved;
+                p.getStateInformation (saved);
+                if (saved.getSize() == 0) ++emptyStates;
+                for (int k = 0; k < 20; ++k)
+                    params[(int) (rng() % (unsigned) params.size())]->setValue (uni (rng));
+                p.setStateInformation (original.getData(), (int) original.getSize());
+            }
+            done = true;
+        });
+        while (! done.load())
+            pumpMessages (10);   // the host serialises state calls with the message thread
+        worker.join();
+        pumpMessages (300);      // let any deferred state work finish
+        stop = true;
+        audio.join();
+        p.releaseResources();
+        editor.reset();
+        pumpMessages (100);
+
+        r.check (emptyStates.load() == 0, juce::String (emptyStates.load()) + " empty states saved from the worker thread");
+        r.check (finite.load(), "finite output while state changes on a worker thread");
+        int mismatches = 0;
+        juce::String examples;
+        for (int i = 0; i < params.size(); ++i)
+            if (std::abs (params[i]->getValue() - before[(size_t) i]) > tolerance (params[i]))
+                if (++mismatches <= 3)
+                    examples << " " << params[i]->getName (40) << " (" << before[(size_t) i] << " -> " << params[i]->getValue() << ")";
+        r.check (mismatches == 0, juce::String (mismatches) + " parameters differ after restoring the original state from a worker thread:" + examples);
+    }
+
+    //------------------------------------------------------------------------------------------
     Report::section ("Editor");
     {
         r.check (p.hasEditor(), "has an editor");

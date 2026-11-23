@@ -18,6 +18,9 @@ CureumProcessor::CureumProcessor()
     globalMod.assign ((size_t) pid::total, 0.0f);
     initResources();
     setPlain (pid::osc (0, Osc::wtPos), 1.0f / 6.0f);   // init patch: saw
+    // Create the weak-reference master now: it is created lazily otherwise, which is not safe
+    // when the first WeakReference is made on a host's worker thread.
+    [[maybe_unused]] const juce::WeakReference<CureumProcessor> weakInit (this);
     startTimerHz (20);
 }
 
@@ -32,13 +35,16 @@ void CureumProcessor::initResources()
         setWavetable (o, WavetableFactory::getDefault());
     for (int l = 0; l < kNumLfos; ++l)
         setLfoShape (l, LfoShape());
-    modSlots = {};
-    publishMatrix();
-    fxOrder.publish (std::make_shared<FxOrder> (FxOrder::defaultOrder()));
-    for (int m = 0; m < kNumMacros; ++m)
-        macroNames[(size_t) m] = "Macro " + juce::String (m + 1);
-    customNoise.publish (nullptr);
-    customNoiseFile = juce::File();
+    {
+        const juce::ScopedLock sl (stateLock);
+        modSlots = {};
+        publishMatrix();
+        fxOrder.publish (std::make_shared<FxOrder> (FxOrder::defaultOrder()));
+        for (int m = 0; m < kNumMacros; ++m)
+            macroNames[(size_t) m] = "Macro " + juce::String (m + 1);
+        customNoise.publish (nullptr);
+        customNoiseFile = juce::File();
+    }
     bumpStructure();
 }
 
@@ -49,10 +55,27 @@ void CureumProcessor::resetToInit()
             p->setValueNotifyingHost (p->getDefaultValue());
     setPlain (pid::osc (0, Osc::wtPos), 1.0f / 6.0f);
     initResources();
-    for (int s = 0; s < 4; ++s)
+    for (int s = 0; s < kNumPluginSlots; ++s)
         fxRack.pluginSlot (s).clear();
-    presetInfo = {};
+    {
+        const juce::ScopedLock sl (stateLock);
+        presetInfo = {};
+    }
     ++presetVersion;
+}
+
+const juce::String CureumProcessor::getProgramName (int)
+{
+    const juce::ScopedLock sl (stateLock);
+    return presetInfo.name;
+}
+
+void CureumProcessor::changeProgramName (int, const juce::String& n)
+{
+    if (! juce::MessageManager::existsAndIsCurrentThread())
+        return;   // the editor reads the name without locking
+    const juce::ScopedLock sl (stateLock);
+    presetInfo.name = n;
 }
 
 //==============================================================================
@@ -403,7 +426,10 @@ const LfoShape& CureumProcessor::getLfoShape (int l) const
 
 void CureumProcessor::setLfoShape (int l, const LfoShape& shape)
 {
-    lfoShapes[(size_t) l] = shape;
+    {
+        const juce::ScopedLock sl (stateLock);
+        lfoShapes[(size_t) l] = shape;
+    }
     lfoShapeSlots[(size_t) l].publish (std::make_shared<LfoShape> (shape));
     bumpStructure();
 }
@@ -416,15 +442,21 @@ void CureumProcessor::publishMatrix()
 void CureumProcessor::setModSlot (int index, const ModSlot& slot)
 {
     if (index < 0 || index >= kNumModSlots) return;
-    modSlots[(size_t) index] = slot;
-    publishMatrix();
+    {
+        const juce::ScopedLock sl (stateLock);
+        modSlots[(size_t) index] = slot;
+        publishMatrix();
+    }
     bumpStructure();
 }
 
 void CureumProcessor::setModSlots (const ModSlots& slots)
 {
-    modSlots = slots;
-    publishMatrix();
+    {
+        const juce::ScopedLock sl (stateLock);
+        modSlots = slots;
+        publishMatrix();
+    }
     bumpStructure();
 }
 
@@ -484,7 +516,10 @@ void CureumProcessor::setFxOrder (const FxOrder& order)
 
 void CureumProcessor::setMacroName (int m, const juce::String& name)
 {
-    macroNames[(size_t) juce::jlimit (0, kNumMacros - 1, m)] = name;
+    {
+        const juce::ScopedLock sl (stateLock);
+        macroNames[(size_t) juce::jlimit (0, kNumMacros - 1, m)] = name;
+    }
     bumpStructure();
 }
 
@@ -523,7 +558,10 @@ void CureumProcessor::clearPluginSlot (int slot)
 void CureumProcessor::setConvolverIr (ConvIr type, const juce::File& customFile)
 {
     if (type == ConvIr::custom && customFile.existsAsFile())
+    {
+        const juce::ScopedLock sl (stateLock);
         fxRack.convolver().loadFile (customFile);
+    }
     setPlain (conv (Conv::ir), (float) (int) type);
     lastConvIr = -1;
     bumpStructure();
@@ -545,8 +583,11 @@ bool CureumProcessor::loadCustomNoise (const juce::File& file, juce::String& err
     s->left.assign (buf.getReadPointer (0), buf.getReadPointer (0) + len);
     const int rc = buf.getNumChannels() > 1 ? 1 : 0;
     s->right.assign (buf.getReadPointer (rc), buf.getReadPointer (rc) + len);
-    customNoise.publish (s);
-    customNoiseFile = file;
+    {
+        const juce::ScopedLock sl (stateLock);
+        customNoise.publish (s);
+        customNoiseFile = file;
+    }
     setPlain (noise (Noise::type), (float) (int) NoiseType::custom);
     bumpStructure();
     return true;
@@ -562,6 +603,17 @@ juce::String CureumProcessor::getCustomNoiseName() const
 juce::ValueTree CureumProcessor::createStateTree (bool includePlugins) const
 {
     auto& self = const_cast<CureumProcessor&> (*this);
+
+    // Hosted plugins are asked for their state without holding stateLock: a plugin may wait for
+    // the message thread inside getStateInformation, and the message thread may be waiting for
+    // stateLock.
+    juce::ValueTree plugins ("Plugins");
+    if (includePlugins)
+        for (int s = 0; s < kNumPluginSlots; ++s)
+            if (self.fxRack.pluginSlot (s).isLoaded())
+                plugins.appendChild (self.fxRack.pluginSlot (s).saveState(), nullptr);
+
+    const juce::ScopedLock sl (stateLock);
     juce::ValueTree root ("CUREUM");
     root.setProperty ("format", 1, nullptr);
     root.setProperty ("version", CUREUM_VERSION_STRING, nullptr);
@@ -612,23 +664,14 @@ juce::ValueTree CureumProcessor::createStateTree (bool includePlugins) const
     }
 
     if (includePlugins)
-    {
-        juce::ValueTree plugins ("Plugins");
-        for (int s = 0; s < 4; ++s)
-            if (self.fxRack.pluginSlot (s).isLoaded())
-                plugins.appendChild (self.fxRack.pluginSlot (s).saveState(), nullptr);
         root.appendChild (plugins, nullptr);
-    }
     return root;
 }
 
-void CureumProcessor::loadStateTree (const juce::ValueTree& tree, bool restorePlugins)
+void CureumProcessor::applyParameterState (const juce::ValueTree& tree)
 {
-    if (! tree.isValid())
-        return;
+    // Start from defaults so missing values never leak from the previous preset.
     const auto& reg = ParamRegistry::get();
-
-    // Parameters: start from defaults so missing values never leak from the previous preset.
     {
         const auto in = tree.getChildWithName ("Params");
         juce::ValueTree full ("Params");
@@ -645,59 +688,71 @@ void CureumProcessor::loadStateTree (const juce::ValueTree& tree, bool restorePl
         }
         apvts.replaceState (full);
     }
+}
 
-    const auto meta = tree.getChildWithName ("Meta");
-    presetInfo.name = meta.getProperty ("name", "Untitled").toString();
-    presetInfo.author = meta.getProperty ("author").toString();
-    presetInfo.description = meta.getProperty ("description").toString();
-    presetInfo.category = meta.getProperty ("category").toString();
-    presetInfo.tags = juce::StringArray::fromTokens (meta.getProperty ("tags").toString(), ",", "");
-    presetInfo.tags.removeEmptyStrings();
+void CureumProcessor::loadStateTree (const juce::ValueTree& tree, bool restorePlugins)
+{
+    if (! tree.isValid())
+        return;
+    jassert (juce::MessageManager::existsAndIsCurrentThread());   // see setStateInformation()
 
-    for (int o = 0; o < kNumOscillators; ++o)
-        setWavetable (o, WavetableFactory::getDefault());
-    for (const auto& t : tree.getChildWithName ("Wavetables"))
+    applyParameterState (tree);
+
     {
-        const int o = t.getProperty ("osc", -1);
-        if (o >= 0 && o < kNumOscillators)
-            setWavetable (o, StateFormat::wavetableFromTree (t));
-    }
+        const juce::ScopedLock sl (stateLock);
+        const auto meta = tree.getChildWithName ("Meta");
+        presetInfo.name = meta.getProperty ("name", "Untitled").toString();
+        presetInfo.author = meta.getProperty ("author").toString();
+        presetInfo.description = meta.getProperty ("description").toString();
+        presetInfo.category = meta.getProperty ("category").toString();
+        presetInfo.tags = juce::StringArray::fromTokens (meta.getProperty ("tags").toString(), ",", "");
+        presetInfo.tags.removeEmptyStrings();
 
-    for (int l = 0; l < kNumLfos; ++l)
-        lfoShapes[(size_t) l] = LfoShape();
-    for (const auto& s : tree.getChildWithName ("LfoShapes"))
-    {
-        const int l = s.getProperty ("lfo", -1);
-        if (l >= 0 && l < kNumLfos)
-            lfoShapes[(size_t) l] = LfoShape::fromVar (juce::JSON::parse (s.getProperty ("json").toString()));
-    }
-    for (int l = 0; l < kNumLfos; ++l)
-        lfoShapeSlots[(size_t) l].publish (std::make_shared<LfoShape> (lfoShapes[(size_t) l]));
+        for (int o = 0; o < kNumOscillators; ++o)
+            setWavetable (o, WavetableFactory::getDefault());
+        for (const auto& t : tree.getChildWithName ("Wavetables"))
+        {
+            const int o = t.getProperty ("osc", -1);
+            if (o >= 0 && o < kNumOscillators)
+                setWavetable (o, StateFormat::wavetableFromTree (t));
+        }
 
-    ModSlots slots;
-    modSlotsFromTree (tree.getChildWithName ("ModMatrix"), slots);
-    modSlots = slots;
-    publishMatrix();
+        for (int l = 0; l < kNumLfos; ++l)
+            lfoShapes[(size_t) l] = LfoShape();
+        for (const auto& s : tree.getChildWithName ("LfoShapes"))
+        {
+            const int l = s.getProperty ("lfo", -1);
+            if (l >= 0 && l < kNumLfos)
+                lfoShapes[(size_t) l] = LfoShape::fromVar (juce::JSON::parse (s.getProperty ("json").toString()));
+        }
+        for (int l = 0; l < kNumLfos; ++l)
+            lfoShapeSlots[(size_t) l].publish (std::make_shared<LfoShape> (lfoShapes[(size_t) l]));
 
-    const auto fx = tree.getChildWithName ("Fx");
-    auto order = fx.isValid() ? FxOrder::fromString (fx.getProperty ("order").toString()) : FxOrder::defaultOrder();
-    fxOrder.publish (std::make_shared<FxOrder> (order));
-    const juce::File convFile (fx.getProperty ("convFile").toString());
-    if (juce::File::isAbsolutePath (convFile.getFullPathName()) && convFile.existsAsFile())
-        fxRack.convolver().loadFile (convFile);
-    lastConvIr = -1;
+        ModSlots slots;
+        modSlotsFromTree (tree.getChildWithName ("ModMatrix"), slots);
+        modSlots = slots;
+        publishMatrix();
 
-    const auto macros = tree.getChildWithName ("Macros");
-    for (int m = 0; m < kNumMacros; ++m)
-        macroNames[(size_t) m] = macros.getProperty ("m" + juce::String (m + 1), "Macro " + juce::String (m + 1)).toString();
+        const auto fx = tree.getChildWithName ("Fx");
+        auto order = fx.isValid() ? FxOrder::fromString (fx.getProperty ("order").toString()) : FxOrder::defaultOrder();
+        fxOrder.publish (std::make_shared<FxOrder> (order));
+        const juce::File convFile (fx.getProperty ("convFile").toString());
+        if (juce::File::isAbsolutePath (convFile.getFullPathName()) && convFile.existsAsFile())
+            fxRack.convolver().loadFile (convFile);
+        lastConvIr = -1;
 
-    customNoise.publish (nullptr);
-    customNoiseFile = juce::File();
-    const juce::File noiseFile (tree.getChildWithName ("Noise").getProperty ("file").toString());
-    if (juce::File::isAbsolutePath (noiseFile.getFullPathName()) && noiseFile.existsAsFile())
-    {
-        juce::String err;
-        loadCustomNoise (noiseFile, err);
+        const auto macros = tree.getChildWithName ("Macros");
+        for (int m = 0; m < kNumMacros; ++m)
+            macroNames[(size_t) m] = macros.getProperty ("m" + juce::String (m + 1), "Macro " + juce::String (m + 1)).toString();
+
+        customNoise.publish (nullptr);
+        customNoiseFile = juce::File();
+        const juce::File noiseFile (tree.getChildWithName ("Noise").getProperty ("file").toString());
+        if (juce::File::isAbsolutePath (noiseFile.getFullPathName()) && noiseFile.existsAsFile())
+        {
+            juce::String err;
+            loadCustomNoise (noiseFile, err);
+        }
     }
 
     if (restorePlugins)
@@ -731,14 +786,60 @@ void CureumProcessor::restorePluginSlots (const juce::ValueTree& plugins)
 
 void CureumProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = createStateTree (true).createXml())
+    // A state restored from another thread that has not been applied yet is the current state.
+    juce::ValueTree tree;
+    {
+        const juce::ScopedLock sl (stateLock);
+        tree = pendingState;
+    }
+    if (! tree.isValid())
+        tree = createStateTree (true);
+    if (auto xml = tree.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
 void CureumProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        loadStateTree (juce::ValueTree::fromXml (*xml), true);
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr)
+        return;
+    auto tree = juce::ValueTree::fromXml (*xml);
+    if (! tree.isValid())
+        return;
+
+    if (juce::MessageManager::existsAndIsCurrentThread())
+    {
+        {
+            const juce::ScopedLock sl (stateLock);
+            pendingState = {};
+        }
+        loadStateTree (tree, true);
+        return;
+    }
+
+    // Some hosts restore state from a worker thread. Parameters are thread-safe and are applied
+    // now; everything the editor reads is applied on the message thread.
+    applyParameterState (tree);
+    {
+        const juce::ScopedLock sl (stateLock);
+        pendingState = tree;
+    }
+    juce::MessageManager::callAsync ([weak = juce::WeakReference<CureumProcessor> (this)]
+    {
+        if (weak != nullptr)
+            weak->applyPendingState();
+    });
+}
+
+void CureumProcessor::applyPendingState()
+{
+    juce::ValueTree tree;
+    {
+        const juce::ScopedLock sl (stateLock);
+        tree = std::exchange (pendingState, juce::ValueTree());
+    }
+    if (tree.isValid())
+        loadStateTree (tree, true);
 }
 
 juce::AudioProcessorEditor* CureumProcessor::createEditor()

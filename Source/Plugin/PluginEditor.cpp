@@ -474,10 +474,13 @@ void CureumEditor::savePresetDialog()
     w->enterModalState (true, juce::ModalCallbackFunction::create ([safe, w] (int result)
     {
         if (safe == nullptr || result != 1) return;
-        safe->proc.presetInfo.author = w->getTextEditorContents ("author");
-        safe->proc.presetInfo.tags = juce::StringArray::fromTokens (w->getTextEditorContents ("tags"), ",", "");
-        safe->proc.presetInfo.tags.trim();
-        safe->proc.presetInfo.tags.removeEmptyStrings();
+        safe->proc.updatePresetInfo ([w] (PresetInfo& info)
+        {
+            info.author = w->getTextEditorContents ("author");
+            info.tags = juce::StringArray::fromTokens (w->getTextEditorContents ("tags"), ",", "");
+            info.tags.trim();
+            info.tags.removeEmptyStrings();
+        });
         juce::String msg;
         safe->presets.saveCurrent (w->getTextEditorContents ("name"), w->getTextEditorContents ("folder"), msg);
         safe->showStatus (msg, true);

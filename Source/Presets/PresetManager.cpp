@@ -69,7 +69,7 @@ bool PresetManager::load (const PresetEntry& entry, juce::String& message)
     if (entry.source == PresetEntry::Source::factory)
     {
         processor.loadStateTree (createFactoryPreset (entry.factoryIndex), false);
-        processor.presetInfo.sourceFile = "factory:" + juce::String (entry.factoryIndex);
+        processor.updatePresetInfo ([&] (PresetInfo& info) { info.sourceFile = "factory:" + juce::String (entry.factoryIndex); });
         message = "Loaded " + entry.name;
         return true;
     }
@@ -86,7 +86,7 @@ bool PresetManager::loadFile (const juce::File& file, juce::String& message)
         return false;
     }
     processor.loadStateTree (r.state, r.sourceFormat == "CUREUM");
-    processor.presetInfo.sourceFile = file.getFullPathName();
+    processor.updatePresetInfo ([&] (PresetInfo& info) { info.sourceFile = file.getFullPathName(); });
     lastWarnings = r.warnings;
     message = "Loaded " + r.name + (r.sourceFormat != "CUREUM" ? " (converted from " + r.sourceFormat + ")" : juce::String());
     return true;
@@ -99,13 +99,13 @@ bool PresetManager::saveCurrent (const juce::String& name, const juce::String& s
     if (subFolder.isNotEmpty())
         folder = folder.getChildFile (juce::File::createLegalFileName (subFolder));
     const auto file = folder.getChildFile (clean + StateFormat::kPresetExtension);
-    processor.presetInfo.name = name.trim().isEmpty() ? clean : name.trim();
+    processor.updatePresetInfo ([&] (PresetInfo& info) { info.name = name.trim().isEmpty() ? clean : name.trim(); });
     if (! StateFormat::writePresetFile (processor.createStateTree (true), file))
     {
         message = "Could not write " + file.getFullPathName();
         return false;
     }
-    processor.presetInfo.sourceFile = file.getFullPathName();
+    processor.updatePresetInfo ([&] (PresetInfo& info) { info.sourceFile = file.getFullPathName(); });
     message = "Saved " + file.getFileName();
     rescan();
     return true;

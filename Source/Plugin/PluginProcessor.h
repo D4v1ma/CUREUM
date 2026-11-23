@@ -41,15 +41,26 @@ public:
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return presetInfo.name; }
-    void changeProgramName (int, const juce::String& n) override { presetInfo.name = n; }
+    const juce::String getProgramName (int) override;
+    void changeProgramName (int, const juce::String& n) override;
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    //== State (message thread)
+    //== State
+    // The members below (preset info, wavetables, LFO shapes, matrix, macro names, ...) are only
+    // changed on the message thread, so the editor reads them without locking. Writers hold
+    // stateLock so a host can save state from another thread at any time; a state restore that
+    // arrives on another thread applies the parameters at once and the rest on the message thread.
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
     PresetInfo presetInfo;
+
+    // Message thread. Updates the preset name/author/tags/... under stateLock.
+    void updatePresetInfo (const std::function<void (PresetInfo&)>& change)
+    {
+        const juce::ScopedLock sl (stateLock);
+        change (presetInfo);
+    }
 
     juce::ValueTree createStateTree (bool includePlugins = true) const;
     void loadStateTree (const juce::ValueTree& tree, bool restorePlugins = true);
@@ -134,6 +145,8 @@ private:
     void renderRange (juce::AudioBuffer<float>& buffer, int start, int num, VoiceContext& ctx);
     void updateFeedback (const VoiceContext& ctx);
     void restorePluginSlots (const juce::ValueTree& tree);
+    void applyParameterState (const juce::ValueTree& tree);
+    void applyPendingState();
 
     ParamCache params;
     SynthEngine engine;
@@ -151,6 +164,7 @@ private:
     juce::File customNoiseFile;
     std::array<juce::String, (size_t) kNumMacros> macroNames;
     juce::CriticalSection stateLock;
+    juce::ValueTree pendingState;   // set by an off-thread setStateInformation until applied
 
     std::vector<float> globalMod;
     double currentSampleRate = 44100.0;

@@ -54,7 +54,7 @@ Requirements: CMake 3.22 or newer, a C++20 compiler (Visual Studio 2022, Xcode 1
 On Linux, install the development packages first (Debian/Ubuntu names):
 
 ```bash
-sudo apt-get install ninja-build libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libxrender-dev libgl1-mesa-dev
+sudo apt-get install ninja-build libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libxcomposite-dev libxrender-dev libxi-dev libgl1-mesa-dev
 ```
 
 Configure and build:
