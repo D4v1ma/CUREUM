@@ -288,7 +288,7 @@ EnvelopeView::Geometry EnvelopeView::geometry() const
     return g;
 }
 
-int EnvelopeView::hitTest (juce::Point<float> p) const
+int EnvelopeView::handleAt (juce::Point<float> p) const
 {
     const auto g = geometry();
     const float top = g.area.getY(), bottom = g.area.getBottom();
@@ -388,14 +388,14 @@ void EnvelopeView::paint (juce::Graphics& gr)
 
 void EnvelopeView::mouseMove (const juce::MouseEvent& e)
 {
-    const int h = hitTest (e.position);
+    const int h = handleAt (e.position);
     if (h != hoverHandle) { hoverHandle = h; repaint(); }
     setMouseCursor (h >= 0 ? juce::MouseCursor::DraggingHandCursor : juce::MouseCursor::NormalCursor);
 }
 
 void EnvelopeView::mouseDown (const juce::MouseEvent& e)
 {
-    dragHandle = hitTest (e.position);
+    dragHandle = handleAt (e.position);
     dragStart = e.position;
     const auto g = geometry();
     switch (dragHandle)

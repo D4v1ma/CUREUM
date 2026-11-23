@@ -163,6 +163,7 @@ inline const char* fxTypeKey (FxType t)
     return keys[(int) t];
 }
 inline bool isPluginSlot (FxType t) { return t >= FxType::plugin1 && t <= FxType::plugin4; }
+constexpr int kNumPluginSlots = (int) FxType::plugin4 - (int) FxType::plugin1 + 1;
 
 enum class DistMode : int
 {

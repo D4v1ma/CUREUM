@@ -93,7 +93,7 @@ juce::MemoryBlock makeSerum2Preset (const juce::var& data, const juce::String& n
     juce::MemoryOutputStream out;
     out.write ("XferJson", 8); out.writeByte (0);
     const auto meta = juce::String ("{\"fileType\":\"SerumPreset\",\"presetName\":\"") + name + "\",\"presetAuthor\":\"Test\",\"product\":\"Serum2\",\"tags\":[\"Bass\"]}";
-    out.writeInt (meta.getNumBytesAsUTF8()); out.writeInt (0);
+    out.writeInt ((int) meta.getNumBytesAsUTF8()); out.writeInt (0);
     out.write (meta.toRawUTF8(), meta.getNumBytesAsUTF8());
     out.writeInt ((int) cbor.getSize()); out.writeInt (2);
     // zstd frame containing a single raw (uncompressed) block
@@ -208,9 +208,17 @@ int runRender (const juce::String& preset, const juce::File& outFile)
     return rr.finite ? 0 : 1;
 }
 
-int runScreenshot (const juce::File& out, const juce::String& tab)
+int runScreenshot (const juce::File& out, const juce::String& tab, float scale, const juce::String& preset)
 {
     CureumProcessor p;
+    if (preset.startsWith ("factory:"))
+        p.loadStateTree (PresetManager::createFactoryPreset (preset.fromFirstOccurrenceOf (":", false, false).getIntValue()), false);
+    else if (preset.isNotEmpty() && preset != "init")
+    {
+        auto r = SerumImport::importFile (juce::File::getCurrentWorkingDirectory().getChildFile (preset));
+        if (! r.ok()) { std::cout << "ERROR: " << r.error << std::endl; return 1; }
+        p.loadStateTree (r.state, false);
+    }
     p.setRateAndBufferSizeDetails (48000.0, 256);
     p.prepareToPlay (48000.0, 256);
     std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditorAndMakeActive());
@@ -218,10 +226,25 @@ int runScreenshot (const juce::File& out, const juce::String& tab)
     if (tab.isNotEmpty())
         editor->getProperties().set ("screenshotTab", tab);
     editor->setVisible (true);
-    // Let timers/animations settle a little.
-    for (int i = 0; i < 20; ++i)
+
+    // Play a chord for a moment so meters, scopes and modulation rings show a live state.
+    juce::AudioBuffer<float> buffer (2, 256);
+    juce::MidiBuffer midi;
+    for (int block = 0; block < 120; ++block)
+    {
+        midi.clear();
+        if (block == 0 && preset.isNotEmpty())
+            for (int note : { 48, 55, 60, 64 })
+                midi.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) 100), 0);
+        buffer.clear();
+        p.processBlock (buffer, midi);
+        if (block % 6 == 0)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
+    }
+    for (int i = 0; i < 10; ++i)
         juce::MessageManager::getInstance()->runDispatchLoopUntil (20);
-    auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 1.0f);
+
+    auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, scale);
     juce::PNGImageFormat png;
     out.deleteFile();
     juce::FileOutputStream fos (out);

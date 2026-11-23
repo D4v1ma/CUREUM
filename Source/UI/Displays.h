@@ -79,7 +79,7 @@ public:
 private:
     struct Geometry { float xA, xH, xD, xS, xR, ySus; juce::Rectangle<float> area; float scale; };
     Geometry geometry() const;
-    int hitTest (juce::Point<float> p) const;
+    int handleAt (juce::Point<float> p) const;
     float timeToWidth (float seconds) const;
     float widthToTime (float w) const;
     EditorServices& services;

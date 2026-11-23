@@ -114,7 +114,6 @@ private:
     float dragStartNorm = 0.0f, dragStartAmount = 0.0f;
     juce::Point<float> dragStart;
     std::unique_ptr<juce::TextEditor> entry;
-    int lastStructure = -1;
 };
 
 //==============================================================================

@@ -134,7 +134,7 @@ bool saveWav (const juce::File& file, const Wavetable& table)
     const auto& raw = table.getRawData();
     juce::MemoryOutputStream out;
     const juce::String clmText = "<!>2048 00000000 wavetable CUREUM";
-    const int clmLen = clmText.getNumBytesAsUTF8() + 1;
+    const int clmLen = (int) clmText.getNumBytesAsUTF8() + 1;
     const int clmPadded = clmLen + (clmLen & 1);
     const auto dataBytes = (juce::uint32) (raw.size() * sizeof (float));
     const juce::uint32 riffSize = 4 + (8 + 16) + (8 + (juce::uint32) clmPadded) + (8 + dataBytes);

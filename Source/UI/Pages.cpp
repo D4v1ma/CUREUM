@@ -831,8 +831,8 @@ GlobalPage::GlobalPage (EditorServices& s) : services (s), proc (s.getProcessor(
     for (int i = 0; i < 8; ++i) if (std::abs (scales[i] - current) < 0.01f) zoom.setSelectedId (i + 1, juce::dontSendNotification);
     zoom.onChange = [this, scales]
     {
-        const float s = scales[juce::jlimit (0, 7, zoom.getSelectedId() - 1)];
-        if (onZoom) onZoom (s);
+        const float scale = scales[juce::jlimit (0, 7, zoom.getSelectedId() - 1)];
+        if (onZoom) onZoom (scale);
     };
     addAndMakeVisible (zoom);
 

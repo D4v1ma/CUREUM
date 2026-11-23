@@ -93,7 +93,7 @@ public:
         g.drawFittedText (sub, text, juce::Justification::centred, 1);
 
         // meters and stats
-        auto meter = juce::Rectangle<float> ((float) getWidth() - 140.0f, 12.0f, 10.0f, 28.0f);
+        auto meter = juce::Rectangle<float> ((float) meterX, 12.0f, 10.0f, 28.0f);
         for (int ch = 0; ch < 2; ++ch)
         {
             auto bar = meter.withWidth (4.0f).translated ((float) ch * 5.0f, 0.0f);
@@ -107,8 +107,9 @@ public:
         }
         g.setFont (theme::value (11.0f));
         g.setColour (theme::textDim);
-        g.drawText ("VOICES " + juce::String (editor.proc.feedback.activeVoices.load()), getWidth() - 122, 10, 110, 16, juce::Justification::left);
-        g.drawText ("CPU " + juce::String (juce::roundToInt (editor.proc.feedback.cpuLoad.load() * 100.0f)) + "%", getWidth() - 122, 26, 110, 16, juce::Justification::left);
+        const int statsX = meterX + 18, statsW = std::max (40, getWidth() - statsX - 8);
+        g.drawText ("VOICES " + juce::String (editor.proc.feedback.activeVoices.load()), statsX, 10, statsW, 16, juce::Justification::left);
+        g.drawText ("CPU " + juce::String (juce::roundToInt (editor.proc.feedback.cpuLoad.load() * 100.0f)) + "%", statsX, 26, statsW, 16, juce::Justification::left);
     }
 
     void resized() override
@@ -118,11 +119,12 @@ public:
         next.setBounds (pa.getRight() - 24, pa.getY() + 7, 20, 20);
         save.setBounds (pa.getRight() + 8, 12, 28, 28);
         menu.setBounds (pa.getRight() + 40, 12, 28, 28);
-        int x = pa.getRight() + 90;
-        for (auto& t : tabs) { t.setBounds (x, 13, 82, 26); x += 86; }
-        help.setBounds (x + 12, 12, 28, 28);
-        whatsThis.setBounds (x + 44, 12, 28, 28);
-        master.setBounds (getWidth() - 200, 2, 52, 48);
+        int x = pa.getRight() + 80;
+        for (auto& t : tabs) { t.setBounds (x, 13, 80, 26); x += 84; }
+        help.setBounds (x + 10, 12, 28, 28);
+        whatsThis.setBounds (help.getRight() + 4, 12, 28, 28);
+        master.setBounds (whatsThis.getRight() + 6, 2, 52, 48);
+        meterX = master.getRight() + 4;
     }
 
     void refresh() override
@@ -159,6 +161,7 @@ public:
     IconButton menu { IconButton::Icon::menu, "Menu", "Init, open and import presets or banks, zoom and more." };
     IconButton help { IconButton::Icon::help, "Help", "Opens the searchable help browser (F1)." };
     IconButton whatsThis { IconButton::Icon::whatsThis, "What's this?", "Toggles help mode: click any control to see what it does." };
+    int meterX = 1040;
     juce::TextButton tabs[4];
     ModKnob master;
     juce::String lastKey;
@@ -618,6 +621,11 @@ void CureumEditor::timerCallback()
     {
         lastPresetVersion = proc.presetVersion.load();
         v.header.repaint();
+    }
+    if (proc.noticeVersion != proc.noticeSeenVersion)
+    {
+        proc.noticeSeenVersion = proc.noticeVersion;
+        showStatus (proc.noticeText, true);
     }
     if (juce::Time::getMillisecondCounter() - v.messageTime > 6000 && juce::Time::getMillisecondCounter() - v.messageTime < 6100)
         v.repaint (v.getLocalBounds().removeFromBottom (24));

@@ -72,6 +72,36 @@ void CureumProcessor::releaseResources()
     engine.allSoundOff();
 }
 
+double CureumProcessor::getTailLengthSeconds() const
+{
+    // Reported so hosts that suspend silent instruments, or stop rendering at silence, keep the
+    // amp release and the reverb/delay tails.
+    const auto on = [this] (FxType t) { return getPlain (pid::fxEnable (t)) >= 0.5f; };
+    double tail = getPlain (pid::env (0, Env::release));
+
+    if (on (FxType::delay))
+    {
+        const double fb = getPlain (pid::delay (Delay::feedback));
+        if (fb >= 0.999)
+            return std::numeric_limits<double>::infinity();   // self-oscillating repeats
+        const bool synced = getPlain (pid::delay (Delay::sync)) >= 0.5f;
+        const double time = synced ? 2.0 : std::max (getPlain (pid::delay (Delay::timeL)), getPlain (pid::delay (Delay::timeR))) / 1000.0;
+        const double repeats = fb > 1.0e-3 ? std::log (1.0e-3) / std::log (fb) : 1.0;
+        tail += time * (1.0 + repeats);
+    }
+    if (on (FxType::reverb))
+        tail += 1.0 + 9.0 * getPlain (pid::reverb (Reverb::size));
+    if (on (FxType::chorus) || on (FxType::flanger) || on (FxType::phaser) || on (FxType::hyper))
+        tail += 0.1;
+    if (on (FxType::convolve))
+        tail += 5.0;
+    for (int slot = 0; slot < kNumPluginSlots; ++slot)
+        if (on ((FxType) ((int) FxType::plugin1 + slot)))
+            tail += 5.0;   // unknown hosted effect: be generous
+
+    return std::min (tail, 120.0);
+}
+
 bool CureumProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
     const auto out = layouts.getMainOutputChannelSet();
@@ -464,12 +494,13 @@ void CureumProcessor::loadPluginIntoSlot (int slot, const juce::PluginDescriptio
     if (stateToRestore != nullptr) state = *stateToRestore;
     juce::WeakReference<CureumProcessor> weak (this);
     pluginHost->createInstance (desc, currentSampleRate, currentBlockSize,
-        [weak, slot, state] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
+        [weak, slot, state, desc] (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
         {
             if (weak == nullptr) return;
             if (instance == nullptr)
             {
-                DBG ("Plugin load failed: " + error);
+                weak->postNotice ("Could not load " + desc.name + " into FX slot " + juce::String (slot + 1)
+                                  + (error.isNotEmpty() ? ": " + error : juce::String (".")));
                 return;
             }
             if (state.getSize() > 0)
@@ -681,14 +712,14 @@ void CureumProcessor::restorePluginSlots (const juce::ValueTree& plugins)
     auto restore = [weak = juce::WeakReference<CureumProcessor> (this), plugins]
     {
         if (weak == nullptr) return;
-        for (int s = 0; s < 4; ++s)
+        for (int s = 0; s < kNumPluginSlots; ++s)
             weak->fxRack.pluginSlot (s).clear();
         for (const auto& p : plugins)
         {
             const int idx = p.getProperty ("index", -1);
             juce::PluginDescription desc;
             juce::MemoryBlock state;
-            if (idx >= 0 && idx < 4 && PluginSlot::readState (p, desc, state))
+            if (idx >= 0 && idx < kNumPluginSlots && PluginSlot::readState (p, desc, state))
                 weak->loadPluginIntoSlot (idx, desc, &state);
         }
     };

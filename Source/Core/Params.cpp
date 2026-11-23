@@ -610,6 +610,17 @@ int ParamRegistry::indexOf (const juce::String& id) const
     return it != idToIndex.end() ? it->second : -1;
 }
 
+namespace
+{
+    // JUCE's AudioParameterInt is not flagged as discrete, so VST3 hosts would treat octave,
+    // semitone or voice-count parameters as continuous. Report them as stepped instead.
+    struct SteppedIntParameter : public juce::AudioParameterInt
+    {
+        using juce::AudioParameterInt::AudioParameterInt;
+        bool isDiscrete() const override { return true; }
+    };
+}
+
 juce::AudioProcessorValueTreeState::ParameterLayout ParamRegistry::createLayout() const
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
@@ -632,6 +643,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout ParamRegistry::createLayout(
                 break;
 
             case ParamKind::integer:
+                // A real integer parameter, so hosts see it as stepped (VST3 stepCount > 0) and
+                // automation/state round-trip exactly.
+                layout.add (std::make_unique<SteppedIntParameter> (pidv, s.name,
+                    juce::roundToInt (s.range.start), juce::roundToInt (s.range.end), juce::roundToInt (s.defaultValue),
+                    juce::AudioParameterIntAttributes()
+                        .withLabel (s.group)
+                        .withStringFromValueFunction ([sp] (int v, int len) { return sp->formatValue ((float) v, len); })));
+                break;
+
             case ParamKind::continuous:
                 layout.add (std::make_unique<juce::AudioParameterFloat> (pidv, s.name, s.range, s.defaultValue,
                     juce::AudioParameterFloatAttributes()

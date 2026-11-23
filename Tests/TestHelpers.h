@@ -20,5 +20,6 @@ namespace cureumtest
 
     int runImport (const juce::File& file);
     int runRender (const juce::String& preset, const juce::File& out);
-    int runScreenshot (const juce::File& out, const juce::String& tab);
+    int runScreenshot (const juce::File& out, const juce::String& tab, float scale = 1.0f, const juce::String& preset = {});
+    int runValidate (const juce::File& pluginFile);   // host-side checks of a built VST3/AU
 }

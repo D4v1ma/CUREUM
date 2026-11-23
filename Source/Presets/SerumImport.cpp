@@ -104,7 +104,7 @@ namespace serumdetail
         }
     };
 
-    SerumLibrary& library() { static SerumLibrary lib; return lib; }
+    static SerumLibrary& library() { static SerumLibrary lib; return lib; }
 
     WavetablePtr resolveWavetable (const juce::String& relPath, juce::StringArray& warnings)
     {

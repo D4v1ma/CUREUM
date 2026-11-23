@@ -37,7 +37,7 @@ public:
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    double getTailLengthSeconds() const override;   // amp release + time-based FX
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
@@ -98,6 +98,13 @@ public:
     std::atomic<int> structureVersion { 0 };   // wavetables, matrix, fx order, shapes, macro names
     std::atomic<int> presetVersion { 0 };      // a different preset was loaded
     void bumpStructure() { ++structureVersion; }
+
+    // A message for the user raised outside the editor (for example a hosted effect that could
+    // not be loaded when a project was reopened). Message thread only; the editor shows each
+    // notice once in its status bar.
+    void postNotice (const juce::String& text) { noticeText = text; ++noticeVersion; }
+    juce::String noticeText;
+    int noticeVersion = 0, noticeSeenVersion = 0;
 
     //== UI feedback written by the audio thread
     struct Feedback

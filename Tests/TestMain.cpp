@@ -3,7 +3,9 @@
 //   CureumTests --unit                         run all unit tests
 //   CureumTests --import <file>                import a Serum/CUREUM preset and print a summary
 //   CureumTests --render <preset|factory:N> <out.wav>   render a short phrase to a WAV file
-//   CureumTests --screenshot <out.png> [tab]   render the editor to a PNG (needs a display or Xvfb)
+//   CureumTests --screenshot <out.png> [tab] [scale] [factory:N|file]
+//                                              render the editor to a PNG (needs a display or Xvfb)
+//   CureumTests --validate <CUREUM.vst3|.component>   load the built plugin as a host would and check it
 //
 // Set CUREUM_FIXTURES to a folder with real Serum presets to enable the fixture tests.
 
@@ -33,8 +35,13 @@ int main (int argc, char* argv[])
         return cureumtest::runImport (juce::File (args[1]));
     if (args[0] == "--render" && args.size() >= 3)
         return cureumtest::runRender (args[1], juce::File (args[2]));
+    if (args[0] == "--validate" && args.size() >= 2)
+        return cureumtest::runValidate (juce::File::getCurrentWorkingDirectory().getChildFile (args[1]));
     if (args[0] == "--screenshot" && args.size() >= 2)
-        return cureumtest::runScreenshot (juce::File (args[1]), args.size() >= 3 ? args[2] : juce::String());
+        return cureumtest::runScreenshot (juce::File::getCurrentWorkingDirectory().getChildFile (args[1]),
+                                          args.size() >= 3 ? args[2] : juce::String(),
+                                          args.size() >= 4 ? (float) args[3].getDoubleValue() : 1.0f,
+                                          args.size() >= 5 ? args[4] : juce::String());
 
     std::cout << "Unknown command" << std::endl;
     return 2;

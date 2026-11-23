@@ -79,10 +79,10 @@ public:
 private:
     void updateControl (int numSamples, const VoiceContext& ctx, int offsetInCall);
     void renderAudio (float* outL, float* outR, int numSamples);
-    float val (const VoiceContext& ctx, int index) const noexcept
+    float val (const VoiceContext& ctx, int paramIndex) const noexcept
     {
-        return ctx.matrix != nullptr && ctx.matrix->modulated[(size_t) index] ? ctx.params->modulated (index, mod[index])
-                                                                               : ctx.params->plain (index);
+        return ctx.matrix != nullptr && ctx.matrix->modulated[(size_t) paramIndex] ? ctx.params->modulated (paramIndex, mod[paramIndex])
+                                                                                    : ctx.params->plain (paramIndex);
     }
 
     double sr = 44100.0, maxSr = 44100.0;

@@ -1,0 +1,123 @@
+name: Build and validate
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-24.04
+          - name: macOS
+            os: macos-14
+          - name: Windows
+            os: windows-2022
+
+    env:
+      ARTEFACTS: build/Cureum_artefacts/Release
+      TESTS: build/CureumTests_artefacts/Release/CureumTests
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build xvfb libasound2-dev libfreetype-dev libfontconfig1-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxcomposite-dev libxrender-dev libgl1-mesa-dev
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cmake -B build -G "Visual Studio 17 2022" -A x64
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          else
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          fi
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 4
+
+      # CI runners have no display on Linux; the tests open windows, so give them a virtual one.
+      - name: Start Xvfb (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Xvfb :99 -screen 0 1600x1000x24 > /dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        run: |
+          "$TESTS" --unit
+
+      - name: Host validation (VST3)
+        run: |
+          "$TESTS" --validate "$GITHUB_WORKSPACE/$ARTEFACTS/VST3/CUREUM.vst3"
+
+      - name: Download pluginval
+        run: |
+          case "$RUNNER_OS" in
+            Linux)   ZIP=pluginval_Linux.zip;   BIN=./pluginval ;;
+            macOS)   ZIP=pluginval_macOS.zip;   BIN=./pluginval.app/Contents/MacOS/pluginval ;;
+            Windows) ZIP=pluginval_Windows.zip; BIN=./pluginval.exe ;;
+          esac
+          curl -sSL -o "$ZIP" "https://github.com/Tracktion/pluginval/releases/latest/download/$ZIP"
+          if command -v unzip > /dev/null; then unzip -q -o "$ZIP"; else 7z x -y "$ZIP" > /dev/null; fi
+          chmod +x "$BIN" || true
+          echo "PLUGINVAL=$BIN" >> "$GITHUB_ENV"
+
+      - name: pluginval (VST3)
+        run: |
+          "$PLUGINVAL" --strictness-level 10 --verbose --validate "$GITHUB_WORKSPACE/$ARTEFACTS/VST3/CUREUM.vst3"
+
+      - name: auval and host validation (AU)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R "$ARTEFACTS/AU/CUREUM.component" ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar || true
+          auval -a | grep -i cure || true
+          auval -strict -v aumu Crm1 Cure
+          "$TESTS" --validate ~/Library/Audio/Plug-Ins/Components/CUREUM.component
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          case "$RUNNER_OS" in
+            Linux)
+              tar -czf dist/CUREUM-Linux.tar.gz -C "$ARTEFACTS" VST3/CUREUM.vst3 Standalone/CUREUM ;;
+            macOS)
+              tar -czf dist/CUREUM-macOS.tar.gz -C "$ARTEFACTS" VST3/CUREUM.vst3 AU/CUREUM.component Standalone/CUREUM.app ;;
+            Windows)
+              (cd "$ARTEFACTS" && 7z a -tzip "$GITHUB_WORKSPACE/dist/CUREUM-Windows.zip" VST3/CUREUM.vst3 Standalone/CUREUM.exe > /dev/null) ;;
+          esac
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CUREUM-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
